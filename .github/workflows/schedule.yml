@@ -1,0 +1,69 @@
+name: Parking Auction Monitor
+on:
+  schedule:
+    - cron: '0 0 * * *' # Once a day
+  workflow_dispatch: # For manual testing
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run script
+        run: |
+          # NOTE: The script must create subject.txt, and body.txt on finding an auction
+          python parking_auction_monitor.py 2>&1
+
+      - name: Set Script Outputs
+        id: script
+        shell: bash
+        run: |
+          # Check if BOTH subject.txt AND body.txt exist.
+          if [ -f subject.txt ] && [ -f body.txt ]; then
+
+            # Set the "found" flag to true
+            echo "found_changes=true" >> $GITHUB_OUTPUT
+
+            # Set the subject output
+            SUBJECT_TERMS=$(cat subject.txt)
+            echo "subject_terms=$SUBJECT_TERMS" >> $GITHUB_OUTPUT
+
+            # Set the clean email body (HTML)
+            EMAIL_BODY=$(cat body.txt)
+            echo "email_body=$EMAIL_BODY" >> $GITHUB_OUTPUT
+
+          # If the condition is false (one or both files are missing),
+          # the outputs are never set, making the 'found_changes' flag default to an empty string,
+          # correctly failing the success email condition.
+          fi
+
+      - name: Get Current Date (Bucharest Time)
+        if: success() && steps.script.outputs.found_changes == 'true'
+        id: date
+        run: echo "now=$(TZ='Europe/Bucharest' date +'%Y-%m-%d %H:%M:%S %Z')" >> $GITHUB_OUTPUT
+
+      - name: Send Email if Recent Changes
+        if: success() && steps.script.outputs.found_changes == 'true'
+        uses: dawidd6/action-send-mail@v4
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.GMAIL_SENDER_ADDRESS }}
+          password: ${{ secrets.GMAIL_APP_PASSWORD }}
+          to: ${{ secrets.GMAIL_RECEIVER_ADDRESS }}
+          from: ${{ secrets.GMAIL_SENDER_ADDRESS }}
+          subject: '[Parking] Auction Found! ${{ steps.script.outputs.subject_terms }}'
+          html_body: |
+            <p>Recent new auctions detected at ${{ steps.date.outputs.now }}:</p>
+
+            ${{ steps.script.outputs.email_body }}
