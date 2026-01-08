@@ -24,8 +24,7 @@ logger = logging.getLogger(__name__)
 
 # URL of the main page with dynamic year
 base_url = "https://www.primaria-iasi.ro"
-current_year = datetime.now().year
-url = f"{base_url}/dm_iasi/portal.nsf/pagini/licitatii+{current_year}-0004028E?Open"
+url = f"{base_url}/dm_iasi/portal.nsf/pagini/licitatii+2026-000465A2?Open"
 
 # Search terms
 search_terms = [
